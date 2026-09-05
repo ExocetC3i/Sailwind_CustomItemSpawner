@@ -2,6 +2,7 @@ using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
@@ -45,7 +46,16 @@ namespace CustomItemSpawner
                 "User defined mass value for this spawned object.",
                 new AcceptableValueRange<int>(1000, 100000)));
 
+            CrateDirectoryItem = Config.Bind(
+                "General",
+                "Game Item Directory",
+                "(Loading item directory...)",
+                new ConfigDescription(
+                    "Prefab name from PrefabsDirectory.directory used as the custom object.",
+                    new AcceptableValueList<string>("(Loading item directory...)")));
+
             new Harmony("com.Exocet.customitemspawner").PatchAll();
+            StartCoroutine(InitializeItemDirectoryWhenReady());
             Logger.LogInfo("Custom object spawner loaded.");
         }
 
@@ -64,8 +74,14 @@ namespace CustomItemSpawner
                 return;
             }
 
+            if (PrefabsDirectory.instance == null ||
+                PrefabsDirectory.instance.directory == null ||
+                PrefabsDirectory.instance.directory.Length == 0)
+            {
+                return;
+            }
+
             ItemDirectory = CreateItemDirectory.Create();
-            itemDirectoryCreated = true;
             Log.LogDebug($"Created item directory with {ItemDirectory.Length} entries.");
 
             List<string> itemNames = new List<string>();
@@ -82,9 +98,10 @@ namespace CustomItemSpawner
 
             if (itemNames.Count == 0)
             {
-                Log.LogError("Cannot create the crate directory item setting: no named prefabs were found.");
                 return;
             }
+
+            itemDirectoryCreated = true;
 
             string defaultItemName = ItemDirectory.Length > 23
                 ? ItemDirectory[23].Name
@@ -94,13 +111,28 @@ namespace CustomItemSpawner
                 defaultItemName = itemNames[0];
             }
 
+            if (!ItemIndices.ContainsKey(CrateDirectoryItem.Value))
+            {
+                CrateDirectoryItem.Value = defaultItemName;
+            }
+
+            PluginConfig.Remove(new ConfigDefinition("General", "Game Item Directory"));
             CrateDirectoryItem = PluginConfig.Bind(
                 "General",
-                "Crate Directory Item",
+                "Game Item Directory",
                 defaultItemName,
                 new ConfigDescription(
                     "Prefab name from PrefabsDirectory.directory used as the custom object.",
                     new AcceptableValueList<string>(itemNames.ToArray())));
+        }
+
+        private static IEnumerator InitializeItemDirectoryWhenReady()
+        {
+            while (!itemDirectoryCreated)
+            {
+                CreateItemDirectoryOnce();
+                yield return null;
+            }
         }
     }
 

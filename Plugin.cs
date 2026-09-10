@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace CustomItemSpawner
 {
-    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.0")]
+    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.1")]
     public sealed class CustomItemSpawnerPlugin : BaseUnityPlugin
     {
         internal static ConfigEntry<string> CrateDirectoryItem;
@@ -239,11 +239,6 @@ namespace CustomItemSpawner
             }
 
             item.name = GetModDataValue(key + NameSuffix, item.name);
-
-            if (item.itemRigidbodyC != null)
-            {
-                item.itemRigidbodyC.UpdateMass();
-            }
         }
 
         internal static void RestoreLoadedCustomObjects()
@@ -268,6 +263,15 @@ namespace CustomItemSpawner
                 }
 
                 RestoreLoadedCustomObject(prefab.GetComponent<ShipItem>());
+            }
+        }
+
+        internal static IEnumerator RestoreLoadedCustomObjectsAfterLoad()
+        {
+            for (int frame = 0; frame < 2; frame++)
+            {
+                yield return null;
+                RestoreLoadedCustomObjects();
             }
         }
 
@@ -311,6 +315,11 @@ namespace CustomItemSpawner
         {
             CustomItemSpawnerPlugin.CreateItemDirectoryOnce();
             CustomItemSpawner.RestoreLoadedCustomObjects();
+            if (SaveLoadManager.instance != null)
+            {
+                SaveLoadManager.instance.StartCoroutine(
+                    CustomItemSpawner.RestoreLoadedCustomObjectsAfterLoad());
+            }
             CustomItemSpawnerPlugin.Log.LogDebug(
                 "Save data loaded; item directory initialized and custom object properties restored.");
         }
@@ -322,6 +331,18 @@ namespace CustomItemSpawner
         private static void Postfix(ShipItem __instance)
         {
             CustomItemSpawner.RestoreLoadedCustomObject(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(ItemRigidbody), nameof(ItemRigidbody.UpdateMass))]
+    internal static class CustomObjectMassUpdatePatch
+    {
+        private static void Prefix(ItemRigidbody __instance)
+        {
+            if (__instance != null)
+            {
+                CustomItemSpawner.RestoreLoadedCustomObject(__instance.GetShipItem());
+            }
         }
     }
 

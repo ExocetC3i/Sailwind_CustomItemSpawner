@@ -9,7 +9,7 @@ using UnityEngine;
 
 namespace CustomItemSpawner
 {
-    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.0.0")]
+    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.0")]
     public sealed class CustomItemSpawnerPlugin : BaseUnityPlugin
     {
         internal static ConfigEntry<string> CrateDirectoryItem;
@@ -239,6 +239,36 @@ namespace CustomItemSpawner
             }
 
             item.name = GetModDataValue(key + NameSuffix, item.name);
+
+            if (item.itemRigidbodyC != null)
+            {
+                item.itemRigidbodyC.UpdateMass();
+            }
+        }
+
+        internal static void RestoreLoadedCustomObjects()
+        {
+            if (!CustomItemSpawnerPlugin.CustomBallastObject.Value ||
+                SaveLoadManager.instance == null)
+            {
+                return;
+            }
+
+            List<SaveablePrefab> prefabs = SaveLoadManager.instance.GetCurrentPrefabs();
+            if (prefabs == null)
+            {
+                return;
+            }
+
+            foreach (SaveablePrefab prefab in prefabs)
+            {
+                if (prefab == null)
+                {
+                    continue;
+                }
+
+                RestoreLoadedCustomObject(prefab.GetComponent<ShipItem>());
+            }
         }
 
         private static void SaveCustomObjectProperties(int instanceId, ShipItem item)
@@ -280,8 +310,9 @@ namespace CustomItemSpawner
         private static void Postfix()
         {
             CustomItemSpawnerPlugin.CreateItemDirectoryOnce();
+            CustomItemSpawner.RestoreLoadedCustomObjects();
             CustomItemSpawnerPlugin.Log.LogDebug(
-                "Save data loaded; item directory initialized.");
+                "Save data loaded; item directory initialized and custom object properties restored.");
         }
     }
 

@@ -9,12 +9,12 @@ using UnityEngine;
 
 namespace CustomItemSpawner
 {
-    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.1")]
+    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.2")]
     public sealed class CustomItemSpawnerPlugin : BaseUnityPlugin
     {
         public const string PLUGIN_GUID = "com.Exocet.customitemspawner";
         public const string PLUGIN_NAME = "Custom Item Spawner";
-        public const string PLUGIN_VERSION = "1.1.1";
+        public const string PLUGIN_VERSION = "1.1.2";
 
         internal static ConfigEntry<string> CrateDirectoryItem;
         internal static ConfigEntry<KeyCode> SpawnKey;

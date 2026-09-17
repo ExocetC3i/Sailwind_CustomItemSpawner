@@ -46,7 +46,7 @@
   <Target Name="PostBuild" AfterTargets="Build">
     <Copy
       SourceFiles="$(TargetPath)"
-      DestinationFolder="E:\SteamLibrary\steamapps\common\Sailwind\BepInEx\plugins\CustomItemSpawner\"
+      DestinationFolder="E:\Documents\Sailwind Mod Development\CustomItemSpawner\build\CustomItemSpawner\"
       OverwriteReadOnlyFiles="true" />
   </Target>
 

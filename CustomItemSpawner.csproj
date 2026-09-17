@@ -44,10 +44,17 @@
   </ItemGroup>
 
   <Target Name="PostBuild" AfterTargets="Build">
+    <PropertyGroup>
+      <PackageDirectory>E:\Documents\Sailwind Mod Development\CustomItemSpawner\build\CustomItemSpawner</PackageDirectory>
+      <PackageZip>E:\Documents\Sailwind Mod Development\CustomItemSpawner\build\CustomItemSpawner.zip</PackageZip>
+    </PropertyGroup>
+    <MakeDir Directories="$(PackageDirectory)" />
     <Copy
       SourceFiles="$(TargetPath)"
-      DestinationFolder="E:\Documents\Sailwind Mod Development\CustomItemSpawner\build\CustomItemSpawner\"
+      DestinationFolder="$(PackageDirectory)"
       OverwriteReadOnlyFiles="true" />
+    <Exec
+      Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;Compress-Archive -Path '$(PackageDirectory)' -DestinationPath '$(PackageZip)' -Force&quot;" />
   </Target>
 
 </Project>

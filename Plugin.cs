@@ -9,12 +9,12 @@ using UnityEngine;
 
 namespace CustomItemSpawner
 {
-    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.2")]
+    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.3")]
     public sealed class CustomItemSpawnerPlugin : BaseUnityPlugin
     {
         public const string PLUGIN_GUID = "com.Exocet.customitemspawner";
         public const string PLUGIN_NAME = "Custom Item Spawner";
-        public const string PLUGIN_VERSION = "1.1.2";
+        public const string PLUGIN_VERSION = "1.1.3";
 
         internal static ConfigEntry<string> CrateDirectoryItem;
         internal static ConfigEntry<KeyCode> SpawnKey;
@@ -30,33 +30,34 @@ namespace CustomItemSpawner
         {
             Log = Logger;
             PluginConfig = Config;
-            SpawnKey = Config.Bind(
-                "General",
-                "Spawn Key",
-                KeyCode.F6,
-                "Key used to spawn the custom object.");
-
-            CustomBallastObject = Config.Bind(
-                "General",
-                "Custom Ballast Object",
-                true,
-                "Apply the custom mass and name to spawned objects.");
-
-            CustomObjectMass = Config.Bind(
-                "General",
-                "Custom Object Mass",
-                10000,
-                new ConfigDescription(
-                "User defined mass value for this spawned object.",
-                new AcceptableValueRange<int>(1000, 100000)));
 
             CrateDirectoryItem = Config.Bind(
                 "General",
-                "Game Item Directory",
+                "CrateDirectoryItem",
                 "(Loading item directory...)",
                 new ConfigDescription(
                     "Prefab name from PrefabsDirectory.directory used as the custom object.",
                     new AcceptableValueList<string>("(Loading item directory...)")));
+
+            CustomBallastObject = Config.Bind(
+                "General",
+                "CustomBallastObject",
+                false,
+                "Apply the custom mass and name to spawned objects.");
+
+            CustomObjectMass = Config.Bind(
+                "General",
+                "CustomObjectMass",
+                10000,
+                new ConfigDescription(
+                    "User defined mass value for this spawned object.",
+                    new AcceptableValueRange<int>(1, 100000)));
+
+            SpawnKey = Config.Bind(
+                "General",
+                "SpawnKey",
+                KeyCode.F6,
+                "Key used to spawn the custom object.");
 
             new Harmony("com.Exocet.customitemspawner").PatchAll();
             StartCoroutine(InitializeItemDirectoryWhenReady());
@@ -120,13 +121,13 @@ namespace CustomItemSpawner
                 CrateDirectoryItem.Value = defaultItemName;
             }
 
-            PluginConfig.Remove(new ConfigDefinition("General", "Game Item Directory"));
+            PluginConfig.Remove(new ConfigDefinition("General", "CrateDirectoryItem"));
             CrateDirectoryItem = PluginConfig.Bind(
                 "General",
                 "Game Item Directory",
                 defaultItemName,
                 new ConfigDescription(
-                    "Prefab name from PrefabsDirectory.directory used as the custom object.",
+                    "Game object to spawn.",
                     new AcceptableValueList<string>(itemNames.ToArray())));
         }
 
@@ -213,6 +214,7 @@ namespace CustomItemSpawner
             {
                 good.RegisterAsMissionless();
             }
+            RestoreLoadedCustomObject(item);
 
             CustomItemSpawnerPlugin.Log.LogInfo(
                 $"Spawned custom object '{prefab.name}' from PrefabsDirectory index {index}.");
@@ -331,6 +333,15 @@ namespace CustomItemSpawner
 
     [HarmonyPatch(typeof(ShipItem), nameof(ShipItem.OnLoad))]
     internal static class CustomObjectShipItemLoadPatch
+    {
+        private static void Postfix(ShipItem __instance)
+        {
+            CustomItemSpawner.RestoreLoadedCustomObject(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(ShipItem), "ProcessSaveable")]
+    internal static class CustomObjectProcessSaveablePatch
     {
         private static void Postfix(ShipItem __instance)
         {

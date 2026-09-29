@@ -6,9 +6,10 @@ Requires [BepInEx Configuration Manager](https://github.com/BepInEx/BepInEx.Conf
 ### How to Use
 Open the BepInEx configuration menu (F1) and select the options you would like under the **CustomItemSpanwer** header.
 1. Select the object you would like to spawn from the list of all available game items. This will include any items from mods you currently have loaded when starting the game.
-2. Check if you would like to customize the object's mass. If left unchecked the original, unmodified item is spawned.
-3. If using a custom mass, set the desired mass using the slider or text entry. Minimum mass is 1,000 with maximum up to 100,000 mass units.
-4. Return to the game and press the spawn item key (F6 by default) to spawn your desired item.
+2. (Optional) Use the text input box to filter the list of game items by keyword.
+3. Check if you would like to customize the object's mass. If left unchecked the original, unmodified item is spawned.
+4. If using a custom mass, set the desired mass using the slider or text entry. Minimum mass is 1,000 with maximum up to 100,000 mass units.
+5. Return to the game and press the spawn item key (F6 by default) to spawn your desired item.
 
 ### Mod Options 
 Rebind the item spawn key to any standard keyboard input. Modifier keys are not allowed. F6 is the default.

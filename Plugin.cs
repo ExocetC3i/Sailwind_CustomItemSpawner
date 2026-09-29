@@ -1,22 +1,26 @@
 using BepInEx;
+using BepInEx.Bootstrap;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Reflection;
 using UnityEngine;
 
 namespace CustomItemSpawner
 {
-    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.1.3")]
+    [BepInPlugin("com.Exocet.customitemspawner", "Custom Item Spawner", "1.2.0")]
     public sealed class CustomItemSpawnerPlugin : BaseUnityPlugin
     {
         public const string PLUGIN_GUID = "com.Exocet.customitemspawner";
         public const string PLUGIN_NAME = "Custom Item Spawner";
-        public const string PLUGIN_VERSION = "1.1.3";
+        public const string PLUGIN_VERSION = "1.2.0";
 
         internal static ConfigEntry<string> CrateDirectoryItem;
+        internal static ConfigEntry<string> ItemKeywordSearch;
+        internal static ConfigEntry<bool> ClearItemKeywordSearch;
         internal static ConfigEntry<KeyCode> SpawnKey;
         internal static ConfigEntry<bool> CustomBallastObject;
         internal static ConfigEntry<int> CustomObjectMass;
@@ -25,6 +29,7 @@ namespace CustomItemSpawner
         internal static ItemDirectoryEntry[] ItemDirectory;
         internal static Dictionary<string, int> ItemIndices;
         private static bool itemDirectoryCreated;
+        private static bool configurationManagerRefreshRequested;
 
         private void Awake()
         {
@@ -38,6 +43,18 @@ namespace CustomItemSpawner
                 new ConfigDescription(
                     "Prefab name from PrefabsDirectory.directory used as the custom object.",
                     new AcceptableValueList<string>("(Loading item directory...)")));
+
+            ItemKeywordSearch = Config.Bind(
+                "General",
+                "Item Keyword Search",
+                string.Empty,
+                "Filter the game item directory by a case-insensitive keyword.");
+
+            ClearItemKeywordSearch = Config.Bind(
+                "General",
+                "Clear Item Keyword Search",
+                false,
+                "Set to true to clear the keyword search and show the full game item list. This button resets itself after use.");
 
             CustomBallastObject = Config.Bind(
                 "General",
@@ -59,6 +76,9 @@ namespace CustomItemSpawner
                 KeyCode.F6,
                 "Key used to spawn the custom object.");
 
+            ItemKeywordSearch.SettingChanged += (_, __) => UpdateGameItemDropdown();
+            ClearItemKeywordSearch.SettingChanged += (_, __) => ClearItemKeywordSearchIfRequested();
+
             new Harmony("com.Exocet.customitemspawner").PatchAll();
             StartCoroutine(InitializeItemDirectoryWhenReady());
             Logger.LogInfo("Custom object spawner loaded.");
@@ -66,6 +86,11 @@ namespace CustomItemSpawner
 
         private void Update()
         {
+            if (configurationManagerRefreshRequested)
+            {
+                RefreshConfigurationManagerSettings();
+            }
+
             if (Input.GetKeyDown(SpawnKey.Value))
             {
                 CustomItemSpawner.Spawn();
@@ -79,6 +104,11 @@ namespace CustomItemSpawner
                 return;
             }
 
+            RebuildItemDirectory();
+        }
+
+        private static void RebuildItemDirectory()
+        {
             if (PrefabsDirectory.instance == null ||
                 PrefabsDirectory.instance.directory == null ||
                 PrefabsDirectory.instance.directory.Length == 0)
@@ -86,18 +116,17 @@ namespace CustomItemSpawner
                 return;
             }
 
-            ItemDirectory = CreateItemDirectory.Create();
-            Log.LogDebug($"Created item directory with {ItemDirectory.Length} entries.");
+            ItemDirectoryEntry[] rebuiltDirectory = CreateItemDirectory.Create();
 
             List<string> itemNames = new List<string>();
-            ItemIndices = new Dictionary<string, int>();
-            for (int index = 0; index < ItemDirectory.Length; index++)
+            Dictionary<string, int> rebuiltIndices = new Dictionary<string, int>();
+            for (int index = 0; index < rebuiltDirectory.Length; index++)
             {
-                string itemName = ItemDirectory[index].Name;
-                if (itemName != null && !ItemIndices.ContainsKey(itemName))
+                string itemName = rebuiltDirectory[index].Name;
+                if (itemName != null && !rebuiltIndices.ContainsKey(itemName))
                 {
                     itemNames.Add(itemName);
-                    ItemIndices.Add(itemName, ItemDirectory[index].Index);
+                    rebuiltIndices.Add(itemName, rebuiltDirectory[index].Index);
                 }
             }
 
@@ -106,29 +135,113 @@ namespace CustomItemSpawner
                 return;
             }
 
-            itemDirectoryCreated = true;
+            ItemDirectory = rebuiltDirectory;
+            ItemIndices = rebuiltIndices;
 
-            string defaultItemName = ItemDirectory.Length > 23
-                ? ItemDirectory[23].Name
+            string defaultItemName = rebuiltDirectory.Length > 23
+                ? rebuiltDirectory[23].Name
                 : null;
             if (defaultItemName == null || !ItemIndices.ContainsKey(defaultItemName))
             {
                 defaultItemName = itemNames[0];
             }
 
-            if (!ItemIndices.ContainsKey(CrateDirectoryItem.Value))
+            itemDirectoryCreated = true;
+            UpdateGameItemDropdown(defaultItemName);
+            Log.LogDebug($"Rebuilt item directory with {ItemDirectory.Length} entries.");
+        }
+
+        private static void UpdateGameItemDropdown(string preferredSelection = null)
+        {
+            if (!itemDirectoryCreated)
             {
-                CrateDirectoryItem.Value = defaultItemName;
+                return;
             }
 
+            List<string> availableItems = new List<string>();
+            string keyword = ItemKeywordSearch.Value == null
+                ? string.Empty
+                : ItemKeywordSearch.Value.Trim();
+            for (int index = 0; index < ItemDirectory.Length; index++)
+            {
+                string itemName = ItemDirectory[index].Name;
+                if (itemName != null &&
+                    ItemIndices[itemName] == ItemDirectory[index].Index &&
+                    (keyword.Length == 0 ||
+                        itemName.IndexOf(keyword, System.StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    availableItems.Add(itemName);
+                }
+            }
+
+            const string noMatches = "(No matching game items)";
+            if (availableItems.Count == 0)
+            {
+                availableItems.Add(noMatches);
+            }
+
+            string currentSelection = CrateDirectoryItem == null
+                ? null
+                : CrateDirectoryItem.Value;
+            string selection = availableItems.Contains(currentSelection)
+                ? currentSelection
+                : availableItems.Contains(preferredSelection)
+                    ? preferredSelection
+                    : availableItems[0];
+
             PluginConfig.Remove(new ConfigDefinition("General", "CrateDirectoryItem"));
+            PluginConfig.Remove(new ConfigDefinition("General", "Game Item Directory"));
             CrateDirectoryItem = PluginConfig.Bind(
                 "General",
                 "Game Item Directory",
-                defaultItemName,
+                selection,
                 new ConfigDescription(
                     "Game object to spawn.",
-                    new AcceptableValueList<string>(itemNames.ToArray())));
+                    new AcceptableValueList<string>(availableItems.ToArray())));
+
+            if (CrateDirectoryItem.Value != selection)
+            {
+                CrateDirectoryItem.Value = selection;
+            }
+
+            configurationManagerRefreshRequested = true;
+        }
+
+        private static void RefreshConfigurationManagerSettings()
+        {
+            configurationManagerRefreshRequested = false;
+            if (!Chainloader.PluginInfos.TryGetValue(
+                "com.bepis.bepinex.configurationmanager",
+                out BepInEx.PluginInfo configurationManagerInfo) ||
+                configurationManagerInfo.Instance == null)
+            {
+                return;
+            }
+
+            MethodInfo rebuildSettings = configurationManagerInfo.Instance.GetType().GetMethod(
+                "BuildSettingList",
+                BindingFlags.Instance | BindingFlags.Public);
+            if (rebuildSettings == null)
+            {
+                Log.LogWarning(
+                    "Configuration Manager was found but does not expose BuildSettingList; " +
+                    "reopen its window to refresh the game item dropdown.");
+                return;
+            }
+
+            rebuildSettings.Invoke(configurationManagerInfo.Instance, null);
+            Log.LogDebug("Refreshed Configuration Manager settings after updating the game item dropdown.");
+        }
+
+        private static void ClearItemKeywordSearchIfRequested()
+        {
+            if (!ClearItemKeywordSearch.Value)
+            {
+                return;
+            }
+
+            ItemKeywordSearch.Value = string.Empty;
+            ClearItemKeywordSearch.Value = false;
         }
 
         private static IEnumerator InitializeItemDirectoryWhenReady()
@@ -137,6 +250,11 @@ namespace CustomItemSpawner
             {
                 CreateItemDirectoryOnce();
                 yield return null;
+            }
+
+            if (ClearItemKeywordSearch.Value)
+            {
+                ClearItemKeywordSearchIfRequested();
             }
         }
     }
@@ -222,7 +340,7 @@ namespace CustomItemSpawner
 
         internal static void RestoreLoadedCustomObject(ShipItem item)
         {
-            if (item == null || !CustomItemSpawnerPlugin.CustomBallastObject.Value)
+            if (item == null)
             {
                 return;
             }
@@ -249,8 +367,7 @@ namespace CustomItemSpawner
 
         internal static void RestoreLoadedCustomObjects()
         {
-            if (!CustomItemSpawnerPlugin.CustomBallastObject.Value ||
-                SaveLoadManager.instance == null)
+            if (SaveLoadManager.instance == null)
             {
                 return;
             }
